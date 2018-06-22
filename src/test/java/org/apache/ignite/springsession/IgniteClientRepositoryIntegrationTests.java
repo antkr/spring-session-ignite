@@ -1,5 +1,6 @@
 package org.apache.ignite.springsession;
 
+import java.util.concurrent.TimeUnit;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteCache;
 import org.junit.AfterClass;
@@ -58,7 +59,7 @@ public class IgniteClientRepositoryIntegrationTests {
 	public void createSessionTest() {
 		IgniteCache<String, MapSession> sessionCache = ignite.getOrCreateCache(DFLT_SESSION_STORAGE_NAME);
 
-		IgniteSession session = this.repository.createSession();
+        final IgniteSession session = this.repository.createSession();
 
 		assertThat(sessionCache.size()).isEqualTo(0);
 
@@ -66,7 +67,7 @@ public class IgniteClientRepositoryIntegrationTests {
 
 		assertThat(sessionCache.size()).isEqualTo(1);
 
-		IgniteSession fetched = this.repository.getSession(session.getId());
+        final IgniteSession fetched = this.repository.getSession(session.getId());
 
 		assertThat(fetched.getId()).isEqualTo(session.getId());
 
@@ -82,12 +83,12 @@ public class IgniteClientRepositoryIntegrationTests {
 		final String attrName = "attribute";
 		final String attrValue = "value";
 
-		IgniteSession session = this.repository.createSession();
+        final IgniteSession session = this.repository.createSession();
 		session.setAttribute(attrName, attrValue);
 
 		this.repository.save(session);
 
-		IgniteSession fetchedSession = this.repository.getSession(session.getId());
+        final IgniteSession fetchedSession = this.repository.getSession(session.getId());
 		assertThat(fetchedSession.getAttribute(attrName).toString()).isEqualTo(attrValue);
 
 		this.repository.delete(session.getId());
@@ -97,16 +98,16 @@ public class IgniteClientRepositoryIntegrationTests {
 
 	@Test
 	public void changeSessionIdOnAttributeUpdate() {
-		IgniteCache<String, MapSession> sessionCache = ignite.getOrCreateCache(DFLT_SESSION_STORAGE_NAME);
+		final IgniteCache<String, MapSession> sessionCache = ignite.getOrCreateCache(DFLT_SESSION_STORAGE_NAME);
 
 		final String attrName = "attribute";
 		final String attrValue = "value";
 
-		IgniteSession session = this.repository.createSession();
+        final IgniteSession session = this.repository.createSession();
 
 		this.repository.save(session);
 
-		IgniteSession fetchedSession = this.repository.getSession(session.getId());
+        final IgniteSession fetchedSession = this.repository.getSession(session.getId());
 
         assertThat(fetchedSession.getAttributeNames()).isEmpty();
 
@@ -114,7 +115,7 @@ public class IgniteClientRepositoryIntegrationTests {
 
 		this.repository.save(fetchedSession);
 
-		IgniteSession changedSession = this.repository.getSession(session.getId());
+        final IgniteSession changedSession = this.repository.getSession(session.getId());
 
 		assertThat(changedSession.getAttribute(attrName).toString()).isEqualTo(attrValue);
 
@@ -122,4 +123,45 @@ public class IgniteClientRepositoryIntegrationTests {
 
 		assertThat(sessionCache.size()).isEqualTo(0);
 	}
+
+	@Test
+    public void igniteSessionsApiOperationsNotCachedTest() {
+
+	    final IgniteSession session = this.repository.createSession();
+	    final IgniteSession secondSession = this.repository.createSession();
+
+        assertThat(session.getId()).isNotEqualTo(secondSession.getId());
+
+	    assertThat(session.isExpired()).isFalse();
+
+	    session.setLastAccessedTime(TimeUnit.NANOSECONDS.toMillis(System.nanoTime()) - TimeUnit.MINUTES.toMillis(30));
+
+	    assertThat(session.isExpired()).isTrue();
+
+	    session.setMaxInactiveIntervalInSeconds(-1);
+
+	    assertThat(session.isExpired()).isFalse();
+
+	    session.setLastAccessedTime(TimeUnit.NANOSECONDS.toMillis(System.nanoTime()) - TimeUnit.SECONDS.toMillis(30));
+
+        assertThat(session.isExpired()).isFalse();
+    }
+
+    @Test
+    public void testExpiredSessionRemovalOnGet() {
+        IgniteCache<String, MapSession> sessionCache = ignite.getOrCreateCache(DFLT_SESSION_STORAGE_NAME);
+
+	    final IgniteSession session = this.repository.createSession();
+
+	    session.setMaxInactiveIntervalInSeconds(30);
+	    session.setLastAccessedTime(session.getLastAccessedTime() - TimeUnit.MINUTES.toMillis(1));
+
+	    repository.save(session);
+
+	    final IgniteSession fetchedSession = this.repository.getSession(session.getId());
+
+	    assertThat(fetchedSession).isNull();
+
+        assertThat(sessionCache.size()).isEqualTo(0);
+    }
 }
