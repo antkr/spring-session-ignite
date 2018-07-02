@@ -11,17 +11,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.session.MapSession;
-import org.apache.ignite.springsession.IgniteSessionRepository.IgniteSession;
 import org.apache.ignite.springsession.config.annotation.SpringSessionIgniteInstance;
 import org.apache.ignite.springsession.config.annotation.web.http.EnableIgniteHttpSession;
 import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.junit4.SpringRunner;
+import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 import org.springframework.test.context.web.WebAppConfiguration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.apache.ignite.springsession.IgniteSessionRepository.DFLT_SESSION_STORAGE_NAME;
 
-@RunWith(SpringRunner.class)
+@RunWith(SpringJUnit4ClassRunner.class)
 @ContextConfiguration
 @WebAppConfiguration
 public class IgniteClientRepositoryIntegrationTests {

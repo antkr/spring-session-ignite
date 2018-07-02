@@ -16,7 +16,6 @@
 
 package org.apache.ignite.springsession;
 
-import java.util.Set;
 import javax.annotation.PostConstruct;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteCache;
@@ -27,15 +26,14 @@ import org.springframework.session.ExpiringSession;
 import org.springframework.session.MapSession;
 import org.springframework.session.SessionRepository;
 import org.springframework.stereotype.Component;
-import org.springframework.util.Assert;
 
 @Component
-public class IgniteSessionRepository implements SessionRepository<IgniteSessionRepository.IgniteSession> {
+public class IgniteSessionRepository implements SessionRepository<IgniteSession> {
 	public static final String DFLT_SESSION_STORAGE_NAME = "spring.session.cache";
 
 	private Long defaultActiveTimeout;
 
-	private IgniteCache<String, MapSession> sessionCache;
+	private IgniteCache<String, IgniteSession> sessionCache;
 
 	@IgniteInstanceResource
 	private Ignite ignite;
@@ -48,8 +46,8 @@ public class IgniteSessionRepository implements SessionRepository<IgniteSessionR
 		this.ignite = ignite;
 	}
 
-	private CacheConfiguration<String, MapSession> getSessionCacheConfig() {
-		CacheConfiguration<String, MapSession> sesCacheCfg = new CacheConfiguration<>();
+	private CacheConfiguration<String, IgniteSession> getSessionCacheConfig() {
+		CacheConfiguration<String, IgniteSession> sesCacheCfg = new CacheConfiguration<String, IgniteSession>();
 
 		sesCacheCfg.setName(this.sessionCacheName);
 		sesCacheCfg.setCacheMode(CacheMode.REPLICATED);
@@ -71,16 +69,16 @@ public class IgniteSessionRepository implements SessionRepository<IgniteSessionR
 
 	@Override
 	public void save(final IgniteSession session) {
-		if (!session.getId().equals(session.originalId)) {
-			delete(session.originalId);
-			session.originalId = session.getId();
+		if (!session.getId().equals(session.getOriginalId())) {
+			delete(session.getOriginalId());
+			session.setOriginalId(session.getId());
 		}
-		this.sessionCache.put(session.getId(), session.delegate);
+		this.sessionCache.put(session.getId(), session);
 	}
 
 	@Override
 	public IgniteSession getSession(String id) {
-		MapSession session = this.sessionCache.get(id);
+		IgniteSession session = this.sessionCache.get(id);
 		if (session == null) {
 			return null;
 		}
@@ -88,7 +86,7 @@ public class IgniteSessionRepository implements SessionRepository<IgniteSessionR
 			delete(id);
 			return null;
 		}
-		return new IgniteSession(session);
+		return session;
 	}
 
 	@Override
@@ -104,7 +102,7 @@ public class IgniteSessionRepository implements SessionRepository<IgniteSessionR
 		this.defaultMaxInactiveInterval = interval;
 	}
 
-	final class IgniteSession implements ExpiringSession {
+	/*final class IgniteSession implements ExpiringSession {
 
 		private final MapSession delegate;
 
@@ -173,5 +171,5 @@ public class IgniteSessionRepository implements SessionRepository<IgniteSessionR
 		public boolean isExpired() {
 			return this.delegate.isExpired();
 		}
-	}
+	}*/
 }
