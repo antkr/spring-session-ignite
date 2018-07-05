@@ -22,8 +22,6 @@ import org.apache.ignite.IgniteCache;
 import org.apache.ignite.cache.CacheMode;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.resources.IgniteInstanceResource;
-import org.springframework.session.ExpiringSession;
-import org.springframework.session.MapSession;
 import org.springframework.session.SessionRepository;
 import org.springframework.stereotype.Component;
 

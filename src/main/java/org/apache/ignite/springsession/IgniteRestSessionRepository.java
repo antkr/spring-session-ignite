@@ -17,7 +17,6 @@ import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
-import org.apache.ignite.internal.util.typedef.internal.SB;
 import org.springframework.session.SessionRepository;
 import org.springframework.stereotype.Component;
 
@@ -104,12 +103,15 @@ public class IgniteRestSessionRepository implements SessionRepository<IgniteSess
     }
 
     private HttpGet buildCacheRequest(String host, String port, Map<String, String> params) throws Exception {
-        SB sb = new SB("http://" + host + ":" + port + "/ignite?");
+        StringBuilder sb = new StringBuilder("http://" + host + ":" + port + "/ignite?");
 
-        for (Map.Entry<String, String> e : params.entrySet())
-            sb.a(e.getKey()).a('=').a(e.getValue()).a('&');
+        String prefix = "";
+        for (Map.Entry<String, String> e : params.entrySet()) {
+            sb.append(prefix);
+            prefix="&";
+            sb.append(e.getKey()).append('=').append(e.getValue());
+        }
 
-        sb.d(sb.length() - 1, sb.length());
         URL url = new URL(sb.toString());
 
         return new HttpGet(url.toURI());
