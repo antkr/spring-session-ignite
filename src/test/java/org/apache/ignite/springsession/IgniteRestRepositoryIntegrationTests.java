@@ -1,8 +1,10 @@
 package org.apache.ignite.springsession;
 
 import java.util.concurrent.TimeUnit;
+import org.apache.ignite.Ignite;
 import org.apache.ignite.springsession.config.annotation.web.http.EnableRestIgniteHttpSession;
 import org.apache.ignite.springsession.config.annotation.web.http.IgniteRestHttpSessionConfiguration;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -22,6 +24,8 @@ public class IgniteRestRepositoryIntegrationTests {
     @Autowired
     private IgniteRestSessionRepository repository;
 
+    private static Ignite ignite;
+
     @Configuration
     @EnableRestIgniteHttpSession(sessionCacheName = "session.cache.v2", igniteAddress = "localhost", ignitePort = "8080")
     static class SessionConfig extends IgniteRestHttpSessionConfiguration {
@@ -30,7 +34,12 @@ public class IgniteRestRepositoryIntegrationTests {
 
     @BeforeClass
     public static void setup() {
-        IgniteTestUtils.getIgniteServerInstance();
+        ignite = IgniteTestUtils.getIgniteServerInstance();
+    }
+
+    @AfterClass
+    public static void teardown() {
+        ignite.close();
     }
 
     @Test
