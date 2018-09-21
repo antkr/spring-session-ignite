@@ -28,7 +28,7 @@ compile group: 'org.apache.ignite', name: 'spring-session-ignite', version: '1.0
 
 ##### Usage patterns
 
-Add `@EnableRestIgniteHttpSession` or '@Enable' annotation to your Spring Boot application class and provide properties:
+Add `@EnableRestIgniteHttpSession` or `@EnableIgniteHttpSession` annotation to your Spring Boot application class and provide properties:
 
 ```java
 import org.springframework.boot.SpringApplication;
