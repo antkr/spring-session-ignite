@@ -1,9 +1,7 @@
 package org.apache.ignite.springsession;
 
-import java.util.concurrent.TimeUnit;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.springsession.config.annotation.web.http.EnableRestIgniteHttpSession;
-import org.apache.ignite.springsession.config.annotation.web.http.IgniteRestHttpSessionConfiguration;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -14,6 +12,8 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 import org.springframework.test.context.web.WebAppConfiguration;
 
+import java.util.concurrent.TimeUnit;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 @RunWith(SpringJUnit4ClassRunner.class)
@@ -21,15 +21,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 @WebAppConfiguration
 public class IgniteRestRepositoryIntegrationTests {
 
+    private static Ignite ignite;
+
     @Autowired
     private IgniteRestSessionRepository repository;
 
-    private static Ignite ignite;
-
     @Configuration
-    @EnableRestIgniteHttpSession(sessionCacheName = "session.cache.v2", igniteAddress = "localhost", ignitePort = "8080")
-    static class SessionConfig extends IgniteRestHttpSessionConfiguration {
-
+    @EnableRestIgniteHttpSession(sessionCacheName = "session.cache.v2", url = "http://localhost:8080/")
+    static class TestConfiguration {
     }
 
     @BeforeClass
@@ -39,7 +38,9 @@ public class IgniteRestRepositoryIntegrationTests {
 
     @AfterClass
     public static void teardown() {
-        ignite.close();
+        if (ignite != null) {
+            ignite.close();
+        }
     }
 
     @Test
@@ -72,7 +73,7 @@ public class IgniteRestRepositoryIntegrationTests {
         final String id = session.getId();
 
         final String attrName = "attribute";
-        final String attrValue = "value";
+        String attrValue = "value";
 
         IgniteSession storedSes = repository.getSession(id);
 

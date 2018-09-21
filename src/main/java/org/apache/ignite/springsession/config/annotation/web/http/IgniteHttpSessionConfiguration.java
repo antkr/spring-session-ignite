@@ -20,7 +20,7 @@ import java.util.Map;
 
 import org.apache.ignite.Ignite;
 import org.apache.ignite.springsession.IgniteSessionRepository;
-import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.ObjectFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -62,14 +62,15 @@ public class IgniteHttpSessionConfiguration extends SpringHttpSessionConfigurati
 
 	@Autowired
 	public void setIgnite(
-			@SpringSessionIgniteInstance ObjectProvider<Ignite> springSessionIgniteInstance,
-			ObjectProvider<Ignite> igniteInstance ) {
-		Ignite igniteToUse = springSessionIgniteInstance.getIfAvailable();
+		@SpringSessionIgniteInstance ObjectFactory<Ignite> springSessionIgniteInstance,
+		ObjectFactory<Ignite> igniteInstance ) {
+		Ignite igniteToUse = springSessionIgniteInstance.getObject();
 		if (igniteToUse == null) {
 			igniteInstance.getObject();
 		}
 		this.ignite = igniteToUse;
 	}
+
 
 	//
 	@Override

@@ -2,30 +2,42 @@ package org.apache.ignite.springsession;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
-import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.ByteArrayInputStream;
+import org.apache.commons.codec.DecoderException;
+import org.apache.commons.codec.binary.Hex;
+import org.apache.http.HttpResponse;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.ResponseHandler;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.methods.HttpUriRequest;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.message.BasicNameValuePair;
+import org.springframework.core.ConfigurableObjectInputStream;
+import org.springframework.core.convert.ConversionService;
+import org.springframework.core.convert.TypeDescriptor;
+import org.springframework.core.convert.converter.Converter;
+import org.springframework.core.convert.support.GenericConversionService;
+import org.springframework.core.serializer.support.SerializationFailedException;
+import org.springframework.core.serializer.support.SerializingConverter;
+import org.springframework.session.SessionRepository;
+import org.springframework.stereotype.Component;
+
+import javax.annotation.PostConstruct;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
-import java.net.URLEncoder;
-import java.util.HashMap;
-import java.util.Map;
-import javax.annotation.PostConstruct;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.springframework.session.SessionRepository;
-import org.springframework.stereotype.Component;
+import java.util.ArrayList;
+import java.util.List;
 
 @Component
 public class IgniteRestSessionRepository implements SessionRepository<IgniteSession> {
 
-    public final static String DFLT_IGNITE_ADDRESS = "localhost";
-
-    public final static String DFLT_IGNITE_PORT = "8080";
+    public final static String DFLT_URL = "http://localhost:8080";
 
     public static final String DFLT_SESSION_STORAGE_NAME = "spring.session.cache";
 
@@ -51,207 +63,203 @@ public class IgniteRestSessionRepository implements SessionRepository<IgniteSess
 
     private static final String PARTITIONED = "PARTITIONED";
 
-    private static String ip;
-
-    private static String port;
+    private String url = DFLT_URL;
 
     private String sessionCacheName;
 
     private Integer defaultMaxInactiveInterval;
 
-    public IgniteRestSessionRepository(String ip, String port) {
-        this.ip = ip;
-        this.port = port;
+    private ObjectMapper mapper;
+
+    private ConversionService conversionService;
+
+    public IgniteRestSessionRepository() {
+
+    }
+
+    public IgniteRestSessionRepository(String url) {
+        this.url = url;
+    }
+
+    private static GenericConversionService createDefaultConversionService() {
+        GenericConversionService converter = new GenericConversionService();
+        converter.addConverter(IgniteSession.class, byte[].class,
+            new SerializingConverter());
+        converter.addConverter(byte[].class, IgniteSession.class,
+            new IgniteSessionDeserializingConverter());
+        return converter;
+    }
+
+    private String serialize(IgniteSession attributeValue) {
+        byte[] value = (byte[]) this.conversionService.convert(attributeValue,
+            TypeDescriptor.valueOf(IgniteSession.class),
+            TypeDescriptor.valueOf(byte[].class));
+        return Hex.encodeHexString(value);
+    }
+
+    private IgniteSession deserialize(String value) throws DecoderException {
+        if ("null".equals(value))
+            return null;
+        return (IgniteSession) this.conversionService.convert(Hex.decodeHex(value.toCharArray()),
+            TypeDescriptor.valueOf(byte[].class),
+            TypeDescriptor.valueOf(IgniteSession.class));
     }
 
     @PostConstruct
     public void init() {
-        CloseableHttpClient client = getHttpClient(this.ip, this.port);
+        this.mapper = new ObjectMapper();
+        this.mapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.NONE);
+        this.mapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
 
-        HttpResponse res;
+        this.conversionService = createDefaultConversionService();
 
-        try {
-            Map<String, String> ss = new HashMap<String, String>();
-            ss.put(CMD, CREATE_CACHE);
-            ss.put(CACHE_NAME, sessionCacheName);
-            ss.put(CACHE_TEMPLATE, REPLICATED);
-            res = client.execute(buildCacheRequest("localhost", "8080", ss));
+        executeSessionCacheCommand(CREATE_CACHE, CACHE_TEMPLATE, REPLICATED);
+    }
 
-            try {
+    @Override
+    public IgniteSession createSession() {
+        IgniteSession session = new IgniteSession();
+
+        if (this.defaultMaxInactiveInterval != null)
+            session.setMaxInactiveIntervalInSeconds(this.defaultMaxInactiveInterval);
+
+        return session;
+    }
+
+    @Override
+    public void save(IgniteSession session) {
+        executeSessionCacheCommand(PUT, KEY, session.getId(), VALUE, serialize(session));
+    }
+
+    @Override
+    public void delete(String id) {
+        executeSessionCacheCommand(DELETE, KEY, id);
+    }
+
+    @Override
+    public IgniteSession getSession(final String id) {
+        ResponseHandler<IgniteSession> hnd = new ResponseHandler<IgniteSession>() {
+            @Override
+            public IgniteSession handleResponse(HttpResponse res) throws IOException {
                 assert res.getStatusLine().getStatusCode() == 200;
+
+                InputStream is = null;
+                try {
+                    is = res.getEntity().getContent();
+                    JsonNode node = mapper.readTree(is).get("response");
+                    IgniteSession session = deserialize(node.asText());
+
+                    if (session == null)
+                        return null;
+
+                    if (session.isExpired()) {
+                        delete(id);
+                        return null;
+                    }
+
+                    return session;
+                } catch (DecoderException e) {
+                    e.printStackTrace();
+                } finally {
+                    if (is != null)
+                        is.close();
+                }
+
+                return null;
             }
-            finally {
-                ((CloseableHttpResponse)res).close();
+        };
+
+        return executeSessionCacheCommand(hnd, GET, KEY, id);
+    }
+
+    private CloseableHttpClient createHttpClient() {
+        return HttpClients.custom().build();
+    }
+
+    private void executeSessionCacheCommand(String command, String... args) {
+        executeSessionCacheCommand(null, command, args);
+    }
+
+    private <T> T executeSessionCacheCommand(ResponseHandler<? extends T> hnd, String command, String... args) {
+        CloseableHttpClient client = createHttpClient();
+        try {
+            HttpUriRequest req = buildCacheCommandRequest(this.url, command, this.sessionCacheName, args);
+
+            if (hnd != null)
+                return client.execute(req, hnd);
+            else {
+                CloseableHttpResponse res = client.execute(req);
+                assert res.getStatusLine().getStatusCode() == 200;
+                res.close();
             }
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             e.printStackTrace();
-        }
-        finally {
+        } finally {
             try {
                 client.close();
-            }
-            catch (IOException e) {
+            } catch (IOException e) {
                 e.printStackTrace();
             }
         }
+
+        return null;
     }
 
-    private CloseableHttpClient getHttpClient(String ip, String port) {
-        CloseableHttpClient client = HttpClients.custom().build();
-        return client;
-    }
+    private HttpUriRequest buildCacheCommandRequest(String urlAddr, String command, String cacheName,
+        String... params) throws Exception {
+        if (params.length % 2 != 0)
+            throw new IllegalArgumentException("Number of parameters should be even");
 
-    private HttpGet buildCacheRequest(String host, String port, Map<String, String> params) throws Exception {
-        StringBuilder sb = new StringBuilder("http://" + host + ":" + port + "/ignite?");
+        List<NameValuePair> paramList = new ArrayList<NameValuePair>(params.length / 2);
 
-        String prefix = "";
-        for (Map.Entry<String, String> e : params.entrySet()) {
-            sb.append(prefix);
-            prefix="&";
-            sb.append(e.getKey()).append('=').append(e.getValue());
+        for (int i = 0; i < params.length; i += 2) {
+            String key = params[i];
+            String val = params[i + 1];
+
+            paramList.add(new BasicNameValuePair(key, val));
         }
 
-        URL url = new URL(sb.toString());
+        URL url = new URL(urlAddr + "/ignite" +
+            "?" + CMD + '=' + command +
+            "&" + CACHE_NAME + '=' + cacheName);
+        HttpPost req = new HttpPost(url.toURI());
+        req.setEntity(new UrlEncodedFormEntity(paramList));
 
-        return new HttpGet(url.toURI());
+        return req;
+    }
+
+    public void setUrl(String url) {
+        this.url = url;
     }
 
     public void setSessionCacheName(String sessionCacheName) {
         this.sessionCacheName = sessionCacheName;
     }
 
-    @Override public IgniteSession createSession() {
-        IgniteSession session = new IgniteSession();
-
-        return session;
-    }
-
-    @Override public void save(IgniteSession session) {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.NONE);
-        mapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
-
-        CloseableHttpClient client = getHttpClient(this.ip, this.port);
-
-        HttpResponse res;
-
-        try {
-            Map<String, String> ss = new HashMap<String, String>();
-            ss.put(CMD, PUT);
-            ss.put(CACHE_NAME, sessionCacheName);
-            ss.put(KEY, session.getId());
-            ss.put(VALUE, URLEncoder.encode(mapper.writeValueAsString(session), "UTF-8"));
-            res = client.execute(buildCacheRequest(this.ip, this.port, ss));
-
-            try {
-                assert res.getStatusLine().getStatusCode() == 200;
-            }
-            finally {
-                ((CloseableHttpResponse)res).close();
-            }
-        }
-        catch (Exception e) {
-            e.printStackTrace();
-        }
-        finally {
-            try {
-                client.close();
-            }
-            catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    @Override public IgniteSession getSession(String id) {
-
-        CloseableHttpClient client = getHttpClient(this.ip, this.port);
-
-        Map<String, String> ss = new HashMap<String, String>();
-        ss.put(CMD, GET);
-        ss.put(CACHE_NAME, sessionCacheName);
-        ss.put(KEY, id);
-
-        HttpResponse res;
-
-        IgniteSession session = null;
-        try {
-            res = client.execute(buildCacheRequest("localhost", "8080", ss));
-            try {
-                assert res.getStatusLine().getStatusCode() == 200;
-
-                InputStream is = null;
-
-                try {
-                    is = res.getEntity().getContent();
-                    ObjectMapper mapper = new ObjectMapper();
-                    mapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.NONE);
-                    mapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
-                    JsonNode node = mapper.readTree(is).get("response");
-                    session = mapper.readValue(node.asText(), IgniteSession.class);
-                }
-                finally {
-                    if (is != null )
-                        is.close();
-                }
-            }
-            finally {
-                ((CloseableHttpResponse)res).close();
-            }
-        }
-        catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        if (session == null) {
-            return null;
-        }
-        if (session.isExpired()) {
-            delete(id);
-            return null;
-        }
-
-        return session;
-    }
-
-    @Override public void delete(String id) {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.NONE);
-        mapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
-
-        CloseableHttpClient client = getHttpClient(this.ip, this.port);
-
-        HttpResponse res;
-
-        try {
-            Map<String, String> ss = new HashMap<String, String>();
-            ss.put(CMD, DELETE);
-            ss.put(CACHE_NAME, sessionCacheName);
-            ss.put(KEY, id);
-            res = client.execute(buildCacheRequest("localhost", "8080", ss));
-
-            try {
-                assert res.getStatusLine().getStatusCode() == 200;
-            }
-            finally {
-                ((CloseableHttpResponse)res).close();
-            }
-        }
-        catch (Exception e) {
-            e.printStackTrace();
-        }
-        finally {
-            try {
-                client.close();
-            }
-            catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
     public void setDefaultMaxInactiveInterval(Integer dfltMaxInactiveInterval) {
         defaultMaxInactiveInterval = dfltMaxInactiveInterval;
     }
+
+    private static class IgniteSessionDeserializingConverter implements Converter<byte[], IgniteSession> {
+
+        @Override public IgniteSession convert(byte[] bytes) {
+            ByteArrayInputStream byteStream = new ByteArrayInputStream(bytes);
+
+            try {
+                ConfigurableObjectInputStream objectInputStream = new ConfigurableObjectInputStream(byteStream, null);
+                return (IgniteSession)objectInputStream.readObject();
+            }
+            catch (Throwable e) {
+                throw new SerializationFailedException("Failed to deserialize payload. Is the byte array a result of corresponding serialization for " + IgniteSessionDeserializingConverter.class.getSimpleName() + "?", e);
+            }
+        }
+    }
+
+    private class IgniteSessionSerializingConverter implements Converter<IgniteSession, byte[]> {
+
+        @Override public byte[] convert(IgniteSession bytes) {
+            return null;
+        }
+    }
+
 }

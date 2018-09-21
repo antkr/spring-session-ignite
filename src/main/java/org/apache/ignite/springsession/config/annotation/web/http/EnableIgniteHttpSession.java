@@ -26,8 +26,6 @@ import org.apache.ignite.springsession.IgniteSessionRepository;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.session.MapSession;
-import org.springframework.session.config.annotation.web.http.EnableSpringHttpSession;
-import org.springframework.session.web.http.SessionRepositoryFilter;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
@@ -36,8 +34,8 @@ import org.springframework.session.web.http.SessionRepositoryFilter;
 @Configuration
 public @interface EnableIgniteHttpSession {
 
-	int maxInactiveIntervalInSeconds() default MapSession.DEFAULT_MAX_INACTIVE_INTERVAL_SECONDS;
+    int maxInactiveIntervalInSeconds() default MapSession.DEFAULT_MAX_INACTIVE_INTERVAL_SECONDS;
 
-	String sessionCacheName() default IgniteSessionRepository.DFLT_SESSION_STORAGE_NAME;
+    String sessionCacheName() default IgniteSessionRepository.DFLT_SESSION_STORAGE_NAME;
 
 }

@@ -1,11 +1,12 @@
 package org.apache.ignite.springsession;
 
+import java.io.Serializable;
 import java.util.Set;
 import org.springframework.session.ExpiringSession;
 import org.springframework.session.MapSession;
 import org.springframework.util.Assert;
 
-public final class IgniteSession implements ExpiringSession {
+public final class IgniteSession implements ExpiringSession, Serializable {
 
     private final MapSession delegate;
 

@@ -6,7 +6,6 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import org.apache.ignite.springsession.IgniteRestSessionRepository;
-import org.apache.ignite.springsession.IgniteSessionRepository;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.session.MapSession;
@@ -22,8 +21,5 @@ public @interface EnableRestIgniteHttpSession {
 
     String sessionCacheName() default IgniteRestSessionRepository.DFLT_SESSION_STORAGE_NAME;
 
-    String igniteAddress() default IgniteRestSessionRepository.DFLT_IGNITE_ADDRESS;
-
-    String ignitePort() default IgniteRestSessionRepository.DFLT_IGNITE_PORT;
-
+    String url() default IgniteRestSessionRepository.DFLT_URL;
 }

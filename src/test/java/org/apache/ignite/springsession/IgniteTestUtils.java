@@ -10,11 +10,11 @@ import org.apache.ignite.spi.discovery.tcp.ipfinder.vm.TcpDiscoveryVmIpFinder;
 public class IgniteTestUtils {
 
 	public static Ignite getIgniteServerInstance() {
-		return Ignition.start(getIgniteCfg().setIgniteInstanceName("server"));
+		return Ignition.start(getIgniteCfg().setGridName("server"));
 	}
 
 	public static Ignite getIgniteClientInstance() {
-		return Ignition.start(getIgniteCfg().setClientMode(true).setIgniteInstanceName("client"));
+		return Ignition.start(getIgniteCfg().setClientMode(true).setGridName("client"));
 	}
 
 	private static IgniteConfiguration getIgniteCfg() {
