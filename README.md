@@ -15,7 +15,7 @@ Spring Session Ignite is a [Spring Session](https://github.com/spring-projects/s
 ##### Maven
 ```xml
 <dependency>
-    <groupId>com.apache.ignite</groupId>
+    <groupId>org.apache.ignite</groupId>
     <artifactId>spring-session-ignite</artifactId>
     <version>1.0</version>
 </dependency>
