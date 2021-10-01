@@ -1,86 +1,141 @@
 package org.apache.ignite.springsession;
 
-import java.io.Serializable;
-import java.util.Set;
-import org.springframework.session.ExpiringSession;
-import org.springframework.session.MapSession;
-import org.springframework.util.Assert;
+import org.springframework.session.Session;
 
-public final class IgniteSession implements ExpiringSession, Serializable {
+import java.time.Duration;
+import java.time.Instant;
+import java.util.*;
 
-    private final MapSession delegate;
+import static org.apache.ignite.springsession.IgniteSessionRepository.DEFAULT_INACTIVE_INTERVAL;
 
+public class IgniteSession implements Session {
+
+    private String id;
     private String originalId;
+    private long createdMs = System.currentTimeMillis();
+    private long accessedMs;
+    private long intervalSeconds;
+    private Date expireAt;
+    private Map<String, Object> attributes = new HashMap<>();
 
-    IgniteSession() {
-        this(new MapSession());
+    public IgniteSession() {
+        this(DEFAULT_INACTIVE_INTERVAL);
     }
 
-    IgniteSession(MapSession ses) {
-        Assert.notNull(ses, "Already cached session cannot be null");
-        this.delegate = ses;
-        this.originalId = ses.getId();
+    public IgniteSession(long maxInactiveIntervalInSeconds) {
+        this(UUID.randomUUID().toString(), maxInactiveIntervalInSeconds);
     }
 
-    public String getId() {
-        return this.delegate.getId();
+    public IgniteSession(String id, long maxInactiveIntervalInSeconds) {
+        this.id = id;
+        this.originalId = id;
+        this.intervalSeconds = maxInactiveIntervalInSeconds;
+        setLastAccessedTime(Instant.ofEpochMilli(this.createdMs));
     }
 
     @Override
-    public <T> T getAttribute(String attributeName) {
-        return this.delegate.getAttribute(attributeName);
+    public String getId() {
+        return this.id;
+    }
+
+    @Override
+    public String changeSessionId() {
+        String sessionId = UUID.randomUUID().toString();
+        this.id = sessionId;
+        return sessionId;
+    }
+
+    @Override
+    public <T> T getAttribute(String s) {
+        return (T) attributes.get(s);
     }
 
     @Override
     public Set<String> getAttributeNames() {
-        return this.delegate.getAttributeNames();
+        return new HashSet<>(this.attributes.keySet());
     }
 
     @Override
-    public void setAttribute(String attributeName, Object attributeValue) {
-        this.delegate.setAttribute(attributeName, attributeValue);
+    public void setAttribute(String s, Object o) {
+        if (o == null)
+            removeAttribute(s);
+        else
+            this.attributes.put(s, o);
     }
 
     @Override
-    public void removeAttribute(String attributeName) {
-        this.delegate.removeAttribute(attributeName);
+    public void removeAttribute(String s) {
+        this.attributes.remove(s);
     }
 
     @Override
-    public long getCreationTime() {
-        return this.delegate.getCreationTime();
+    public Instant getCreationTime() {
+        return Instant.ofEpochMilli(this.createdMs);
     }
 
     @Override
-    public void setLastAccessedTime(long lastAccessedTime) {
-        this.delegate.setLastAccessedTime(lastAccessedTime);
+    public void setLastAccessedTime(Instant instant) {
+        this.accessedMs = instant.toEpochMilli();
+        this.expireAt = Date.from(instant.plus(Duration.ofSeconds(this.intervalSeconds)));
     }
 
     @Override
-    public long getLastAccessedTime() {
-        return this.delegate.getLastAccessedTime();
+    public Instant getLastAccessedTime() {
+        return Instant.ofEpochMilli(this.accessedMs);
     }
 
     @Override
-    public void setMaxInactiveIntervalInSeconds(int interval) {
-        this.delegate.setMaxInactiveIntervalInSeconds(interval);
+    public void setMaxInactiveInterval(Duration duration) {
+        long difference = duration.getSeconds() - this.intervalSeconds;
+
+        this.intervalSeconds = duration.getSeconds();
+
+        Instant instantToExpire = expireAt.toInstant();
+
+        if (difference < 0)
+            this.expireAt = Date.from(instantToExpire.minus(Duration.ofSeconds(Math.abs(difference))));
+        else
+            this.expireAt = Date.from(instantToExpire.plus(Duration.ofSeconds(Math.abs(difference))));
     }
 
     @Override
-    public int getMaxInactiveIntervalInSeconds() {
-        return this.delegate.getMaxInactiveIntervalInSeconds();
+    public Duration getMaxInactiveInterval() {
+        return Duration.ofSeconds(this.intervalSeconds);
     }
 
     @Override
     public boolean isExpired() {
-        return this.delegate.isExpired();
+        return this.intervalSeconds >=0 && new Date().after(this.expireAt);
     }
 
-    public void setOriginalId(String originalId) {
-        this.originalId = originalId;
+    @Override
+    public int hashCode() {
+        return Objects.hash(this.id);
     }
 
-    public String getOriginalId() {
-        return originalId;
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+        IgniteSession another = (IgniteSession) o;
+        return Objects.equals(this.id, another.id);
+    }
+
+    String getOriginalSessionId() {
+        return this.originalId;
+    }
+
+    boolean sessionIdChanged() {
+        return !getId().equals(this.originalId);
+    }
+
+    public Date getExpireAt() {
+        return expireAt;
+    }
+
+    public void setExpireAt(Date expireAt) {
+        this.expireAt = expireAt;
     }
 }

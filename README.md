@@ -8,7 +8,7 @@ Spring Session Ignite is a [Spring Session](https://github.com/spring-projects/s
 ## How to build
 --------------------------------
 * Clone this repository
-* Run ``` ./gradlew clean install ``` in the project folder to build the project and install it to local Maven repo.
+* Run ``` ./mvn clean install ``` in the project folder to build the project and install it to local Maven repo.
 
 ## Add `spring-session-ignite` as a dependency to your project using:
 
@@ -17,13 +17,13 @@ Spring Session Ignite is a [Spring Session](https://github.com/spring-projects/s
 <dependency>
     <groupId>org.apache.ignite</groupId>
     <artifactId>spring-session-ignite</artifactId>
-    <version>1.0</version>
+    <version>2.5.2-SNAPSHOT</version>
 </dependency>
 ```
 
 ##### Gradle
 ```groovy
-compile group: 'org.apache.ignite', name: 'spring-session-ignite', version: '1.0'
+compile group: 'org.apache.ignite', name: 'spring-session-ignite', version: '2.5.2-SNAPSHOT'
 ```
 
 ##### Usage patterns

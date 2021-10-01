@@ -1,102 +1,101 @@
-/*
- * Copyright 2014-2018 the original author or authors.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.apache.ignite.springsession;
 
-import javax.annotation.PostConstruct;
 import org.apache.ignite.Ignite;
 import org.apache.ignite.IgniteCache;
+import org.apache.ignite.cache.CacheAtomicityMode;
 import org.apache.ignite.cache.CacheMode;
+import org.apache.ignite.cache.CacheWriteSynchronizationMode;
 import org.apache.ignite.configuration.CacheConfiguration;
 import org.apache.ignite.resources.IgniteInstanceResource;
-import org.springframework.session.SessionRepository;
-import org.springframework.stereotype.Component;
+import org.springframework.session.FindByIndexNameSessionRepository;
 
-@Component
-public class IgniteSessionRepository implements SessionRepository<IgniteSession> {
-	public static final String DFLT_SESSION_STORAGE_NAME = "spring.session.cache";
+import javax.annotation.PostConstruct;
+import java.time.Duration;
+import java.util.Map;
 
-	private Long defaultActiveTimeout;
+public class IgniteSessionRepository implements FindByIndexNameSessionRepository<IgniteSession> {
 
-	private IgniteCache<String, IgniteSession> sessionCache;
+    public static final String DFLT_SESSION_STORAGE_NAME = "spring.session.cache";
+    public static final int DEFAULT_INACTIVE_INTERVAL = 1800;
 
-	@IgniteInstanceResource
-	private Ignite ignite;
+    @IgniteInstanceResource
+    private Ignite ignite;
 
-	private String sessionCacheName;
+    private IgniteCache<String, IgniteSession> sessionCache;
 
-	private Integer defaultMaxInactiveInterval;
+    private String sessionCacheName = DFLT_SESSION_STORAGE_NAME;
 
-	public IgniteSessionRepository(Ignite ignite) {
-		this.ignite = ignite;
-	}
+    private Integer defaultMaxInactiveInterval = DEFAULT_INACTIVE_INTERVAL;
 
-	private CacheConfiguration<String, IgniteSession> getSessionCacheConfig() {
-		CacheConfiguration<String, IgniteSession> sesCacheCfg = new CacheConfiguration<String, IgniteSession>();
+    public IgniteSessionRepository(Ignite ignite) {
+        this.ignite = ignite;
+    }
 
-		sesCacheCfg.setName(this.sessionCacheName);
-		sesCacheCfg.setCacheMode(CacheMode.REPLICATED);
+    private CacheConfiguration<String, IgniteSession> sessionCacheConfiguration() {
+        CacheConfiguration<String, IgniteSession> ccfg = new CacheConfiguration<>();
 
-		return sesCacheCfg;
-	}
+        ccfg.setAtomicityMode(CacheAtomicityMode.TRANSACTIONAL);
+        ccfg.setWriteSynchronizationMode(CacheWriteSynchronizationMode.FULL_SYNC);
+        ccfg.setCacheMode(CacheMode.REPLICATED);
+        ccfg.setName(sessionCacheName);
 
-	@PostConstruct
-	public void init() {
-		this.sessionCache = this.ignite.getOrCreateCache(this.getSessionCacheConfig());
-	}
+        return ccfg;
+    }
 
-	@Override
-	public IgniteSession createSession() {
-		IgniteSession session = new IgniteSession();
+    @PostConstruct
+    public void init() {
+        this.sessionCache = this.ignite.getOrCreateCache(this.sessionCacheConfiguration());
+    }
 
-		return session;
-	}
+    @Override
+    public Map<String, IgniteSession> findByIndexNameAndIndexValue(String s, String s1) {
+        return null;
+    }
 
-	@Override
-	public void save(final IgniteSession session) {
-		if (!session.getId().equals(session.getOriginalId())) {
-			delete(session.getOriginalId());
-			session.setOriginalId(session.getId());
-		}
-		this.sessionCache.put(session.getId(), session);
-	}
+    @Override
+    public IgniteSession createSession() {
+        IgniteSession session = new IgniteSession();
 
-	@Override
-	public IgniteSession getSession(String id) {
-		IgniteSession session = this.sessionCache.get(id);
-		if (session == null) {
-			return null;
-		}
-		if (session.isExpired()) {
-			delete(id);
-			return null;
-		}
-		return session;
-	}
+        if (this.defaultMaxInactiveInterval != null)
+            session.setMaxInactiveInterval(Duration.ofSeconds(this.defaultMaxInactiveInterval));
 
-	@Override
-	public void delete(String id) {
-		this.sessionCache.remove(id);
-	}
+        return session;
+    }
 
-	public void setSessionCacheName(String name) {
-		this.sessionCacheName = name;
-	}
+    @Override
+    public void save(IgniteSession igniteSession) {
+        if(igniteSession.sessionIdChanged())
+            this.sessionCache.remove(igniteSession.getOriginalSessionId());
 
-	public void setDefaultMaxInactiveInterval(Integer interval) {
-		this.defaultMaxInactiveInterval = interval;
-	}
+        this.sessionCache.put(igniteSession.getId(), igniteSession);
+    }
+
+    @Override
+    public IgniteSession findById(String key) {
+        IgniteSession storedSession = this.sessionCache.get(key);
+
+        if (storedSession == null)
+            return null;
+
+        if (storedSession.isExpired()) {
+            deleteById(key);
+
+            return null;
+        }
+
+        return storedSession;
+    }
+
+    @Override
+    public void deleteById(String key) {
+        this.sessionCache.remove(key);
+    }
+
+    public void setSessionCacheName(String name) {
+        this.sessionCacheName = name;
+    }
+
+    public void setDefaultMaxInactiveInterval(Integer interval) {
+        this.defaultMaxInactiveInterval = interval;
+    }
 }

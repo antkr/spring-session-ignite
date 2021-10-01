@@ -35,54 +35,54 @@ import org.springframework.util.StringUtils;
 @Configuration
 public class IgniteHttpSessionConfiguration extends SpringHttpSessionConfiguration implements ImportAware {
 
-	private String sessionCacheName = IgniteSessionRepository.DFLT_SESSION_STORAGE_NAME;
+    private String sessionCacheName = IgniteSessionRepository.DFLT_SESSION_STORAGE_NAME;
 
-	private Integer maxInactiveIntervalInSeconds = MapSession.DEFAULT_MAX_INACTIVE_INTERVAL_SECONDS;
+    private Integer maxInactiveIntervalInSeconds = MapSession.DEFAULT_MAX_INACTIVE_INTERVAL_SECONDS;
 
-	private Ignite ignite;
+    private Ignite ignite;
 
-	@Bean
-	public IgniteSessionRepository sessionRepository() {
-		IgniteSessionRepository sessionRepository = new IgniteSessionRepository(ignite);
+    @Bean
+    public IgniteSessionRepository sessionRepository() {
+        IgniteSessionRepository sessionRepository = new IgniteSessionRepository(ignite);
 
-		sessionRepository.setSessionCacheName(this.sessionCacheName);
+        sessionRepository.setSessionCacheName(this.sessionCacheName);
 
-		sessionRepository.setDefaultMaxInactiveInterval(this.maxInactiveIntervalInSeconds);
+        sessionRepository.setDefaultMaxInactiveInterval(this.maxInactiveIntervalInSeconds);
 
-		return sessionRepository;
-	}
+        return sessionRepository;
+    }
 
-	public void setMaxInactiveIntervalInSeconds(Integer maxInactiveIntervalInSeconds) {
-		this.maxInactiveIntervalInSeconds = maxInactiveIntervalInSeconds;
-	}
+    public void setMaxInactiveIntervalInSeconds(Integer maxInactiveIntervalInSeconds) {
+        this.maxInactiveIntervalInSeconds = maxInactiveIntervalInSeconds;
+    }
 
-	public void setSessionCacheName(String sessionCacheName) {
-		this.sessionCacheName = sessionCacheName;
-	}
+    public void setSessionCacheName(String sessionCacheName) {
+        this.sessionCacheName = sessionCacheName;
+    }
 
-	@Autowired
-	public void setIgnite(
-		@SpringSessionIgniteInstance ObjectFactory<Ignite> springSessionIgniteInstance,
-		ObjectFactory<Ignite> igniteInstance ) {
-		Ignite igniteToUse = springSessionIgniteInstance.getObject();
-		if (igniteToUse == null) {
-			igniteInstance.getObject();
-		}
-		this.ignite = igniteToUse;
-	}
+    @Autowired
+    public void setIgnite(
+            @SpringSessionIgniteInstance ObjectFactory<Ignite> springSessionIgniteInstance,
+            ObjectFactory<Ignite> igniteInstance ) {
+        Ignite igniteToUse = springSessionIgniteInstance.getObject();
+        if (igniteToUse == null) {
+            igniteInstance.getObject();
+        }
+        this.ignite = igniteToUse;
+    }
 
 
-	//
-	@Override
-	public void setImportMetadata(AnnotationMetadata importMetadata) {
-		Map<String, Object> attributeMap = importMetadata
-				.getAnnotationAttributes(EnableIgniteHttpSession.class.getName());
-		AnnotationAttributes attributes = AnnotationAttributes.fromMap(attributeMap);
-		this.maxInactiveIntervalInSeconds =
-				attributes.getNumber("maxInactiveIntervalInSeconds");
-		String sessionCacheNameValue = attributes.getString("sessionCacheName");
-		if (StringUtils.hasText(sessionCacheNameValue)) {
-			this.sessionCacheName = sessionCacheNameValue;
-		}
-	}
+    //
+    @Override
+    public void setImportMetadata(AnnotationMetadata importMetadata) {
+        Map<String, Object> attributeMap = importMetadata
+                .getAnnotationAttributes(EnableIgniteHttpSession.class.getName());
+        AnnotationAttributes attributes = AnnotationAttributes.fromMap(attributeMap);
+        this.maxInactiveIntervalInSeconds =
+                attributes.getNumber("maxInactiveIntervalInSeconds");
+        String sessionCacheNameValue = attributes.getString("sessionCacheName");
+        if (StringUtils.hasText(sessionCacheNameValue)) {
+            this.sessionCacheName = sessionCacheNameValue;
+        }
+    }
 }
